@@ -98,6 +98,42 @@ DS primitive: <ComponentName>
 
 If the table has zero rows, state that explicitly: "Audited <Component>, no divergence." Silent skipping is not allowed.
 
+### 2.5. Container decoration checklist (mandatory before drawing children)
+
+For every container frame that appears in the layout — including "new"
+wrappers that aren't DS primitives — list its OWN decorations BEFORE
+enumerating children. These belong to the frame itself, not to any
+child, and the layer tree hides them as properties on the parent — the
+single most common Figma → code drift after typography. The Step 2
+audit only covers DS primitives; new wrappers fall straight through
+without this checklist.
+
+For each container, write a one-line row:
+
+```
+.<container>  stroke-top:<weight, color, opacity | none>
+              stroke-right:<…>   stroke-bottom:<…>   stroke-left:<…>
+              fill:<color, opacity | none>
+              effect:<drop-shadow / inner-shadow / blur | none>
+              radius:<n | 0>   padding:<t r b l>
+```
+
+If a side has no stroke, write `none` explicitly. Silent omission is
+the failure mode — "I didn't see it" means "I didn't look." Same
+anti-silent-skip discipline as the DS primitive audit in Step 2.
+
+Watch especially for:
+
+- **1px hairline dividers at 5–10% opacity** — almost invisible in the
+  Figma canvas, trivially missed when scanning by eye.
+- **Asymmetric strokes** — e.g. `border-top` + `border-bottom` but no
+  sides. Easy to assume "no border" if you only check one side.
+- **Effect-mode shadows / inner-shadows** — applied via Figma's
+  Effects panel, not visible in the layer tree until expanded.
+- **Container fill vs. ancestor fill** — a wrapper that "looks
+  transparent" may actually carry its own translucent tint that
+  composites differently from the parent.
+
 ### 3. ASCII layout container diagram
 
 Skeleton:
