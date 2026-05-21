@@ -33,6 +33,10 @@ Fix the ranking before reading any source:
 
 If sources conflict, the higher source wins.
 
+### Figma protocol
+
+When the user provides a figma.com URL or node id, calling `get_design_context` for that node is mandatory before writing any CSS. `get_metadata` alone is insufficient — it returns layer geometry but not tokens, fonts, or surface treatment. Improvising visual values (colors, fonts, shadows, radii, blur, borders) when a design source exists is a process failure. If the Figma MCP response itself instructs you to call `get_design_context`, that instruction is non-negotiable.
+
 ## Format conventions
 
 Apply to every artifact below:
@@ -63,7 +67,38 @@ New wrappers / primitives:
 
 If a component doesn't exist yet, mark it `(new)` so the user can override the choice before code is written.
 
-### 2. ASCII layout container diagram
+### 2. DS primitive audit
+
+For every design-system or repo component in the enumeration that appears inside a Figma frame, you MUST do this BEFORE writing any CSS. Skipping it is the most common way Visual Calculus produces "50% right" output: the outer box is correct, the inner component drifts.
+
+For each such primitive:
+
+a. Read the DS's rendered CSS for the primitive's classes (e.g. `.cc-radio-button-component`, `.cc-radio-button-label`, `.cc-button-primary`). The bundled stylesheet is the source of truth, not the docs.
+b. Compare against the Figma component's `data-node-id` rendering returned by `get_design_context`.
+c. Produce a divergence table — every property that differs must be either explicitly accepted as deviation or overridden via a scoped `:deep()` rule.
+
+Watch especially for:
+
+- **font-family** — DS components rarely declare it; the label inherits from `body`. Common cause of Chess Sans / Inter mismatches.
+- **min-height / min-width** — DS often forces 20px rows where Figma allots 16px, inflating overall component height.
+- **internal margin on the input/icon** — DS uses margins as vertical-alignment hacks that shift visual centers.
+- **internal padding on labels** — DS often uses `padding-left` for icon-to-text gap; Figma uses `gap` on the wrapper. Picking one without the other yields double-spacing or no spacing.
+- **color tokens** — DS may use a generic default token; Figma may specify a brighter / dimmer variant for the surface in question.
+
+Skeleton:
+
+```
+DS primitive: <ComponentName>
+| Property      | DS default              | Figma spec        | Action               |
+|---------------|-------------------------|-------------------|----------------------|
+| font-family   | (inherits Chess Sans)   | Inter Regular     | :deep override       |
+| min-height    | 2rem                    | 16px              | :deep min-height: 0  |
+| input margin  | 0.3rem 0 0.2rem 0       | 0                 | :deep margin: 0      |
+```
+
+If the table has zero rows, state that explicitly: "Audited <Component>, no divergence." Silent skipping is not allowed.
+
+### 3. ASCII layout container diagram
 
 Skeleton:
 
@@ -78,7 +113,7 @@ Skeleton:
 
 Mark every positioned child. Leave un-positioned children with no annotation column.
 
-### 3. ASCII per-component diagrams
+### 4. ASCII per-component diagrams
 
 For each component in the enumeration, sketch internal structure: padding, dimensions, child order, alignment. Skeleton:
 
@@ -93,7 +128,17 @@ For each component in the enumeration, sketch internal structure: padding, dimen
 
 Make *invariants* legible — not every CSS property.
 
-### 4. Stacking note
+At the end of each diagram, write a dimensional sum and verify it against the Figma frame's reported size. Example:
+
+```
+total height = padding-top + header + 4·(gap + row) + padding-bottom
+            = 16 + 16 + 4·(8 + 16) + 16
+            = 144  ✓ matches Figma frame size (200×144)
+```
+
+If the math doesn't match the frame, the spec has drifted. Back up before writing CSS — either a row height is wrong, a gap is wrong, or padding is wrong. Don't wallpaper over the discrepancy by tweaking values until it visually fits.
+
+### 5. Stacking note
 
 Three lines max, referencing the container diagram and any prior decisions earlier in the session:
 
@@ -104,7 +149,7 @@ Stacking note:
 - Choosing z:<X> because <reason>.
 ```
 
-### 5. Verification handoff
+### 6. Verification handoff
 
 End the plan with an explicit verification checklist of 2–4 specific things the user will see in the rendered output. Never declare a visual change "done", "fixed", or "matches the screenshot" — this model cannot see rendered pages.
 
@@ -117,7 +162,7 @@ Ready to verify. Please confirm in the rendered output:
 - [ ] <specific visible thing 3>
 ```
 
-### 6. Optional: browser-use delegation for pixel fidelity
+### 7. Optional: browser-use delegation for pixel fidelity
 
 For layouts where pixel-perfect accuracy matters — the user has expressed a "100−1=0" standard, has asked for 1:1 matching against a design frame, or the work is shipping to production — delegate visual verification to a `browser-use` subagent after the implementation lands.
 
@@ -127,7 +172,7 @@ The subagent can:
 - Compare against the source design (Figma frame, screenshot)
 - Report measured discrepancies (spacing, color, alignment) that the parent agent cannot see
 
-Trigger this only when the user opts in or when pixel-fidelity is explicit. The verification handoff in Step 5 is sufficient for most work; browser-use delegation is the escalation path.
+Trigger this only when the user opts in or when pixel-fidelity is explicit. The verification handoff in Step 6 is sufficient for most work; browser-use delegation is the escalation path.
 
 ## Example trigger
 
